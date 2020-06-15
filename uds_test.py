@@ -1,5 +1,7 @@
 from zlgcan import *
 import threading
+import ctypes
+#import numpy as np
 
 def can_start(zcanlib, device_handle, chn):
     ip = zcanlib.GetIProperty(device_handle)#获取设定属性handle
@@ -51,13 +53,25 @@ def recive_thread_func():
         #else:
         #    break
 
+class SEED(Structure):
+    _fields_ = [("seed1", c_ubyte),
+                ("seed2", c_ubyte),
+                ("seed3", c_ubyte),
+                ("seed4", c_ubyte)]
+
 def shell_command():
+    test = windll.LoadLibrary("test.dll")
+    seed = SEED()
+    seed.seed1 = 1
+    seed.seed2 = 2
+    seed.seed3 = 3
+    seed.seed4 = 4
+    seedhash = SEED()
     while True:
         s = input("C71KB#")
         print("%s" %(s))
-        info = zcanlib.GetDeviceInf(handle)
-        print("Device Information:\n%s" %(info))
-
+        print("%d" %(seed.seed1))
+        test.test(byref(seed),byref(seedhash))
 
 if __name__ == "__main__":
     zcanlib = ZCAN() 
