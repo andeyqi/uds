@@ -405,32 +405,7 @@ class ZCAN(object):
             print("Exception on ZCAN_ReleaseIProperty!")
             raise
 ###############################################################################
-'''
-USBCANFD-MINI Demo
-'''
-def can_start(zcanlib, device_handle, chn):
-    ip = zcanlib.GetIProperty(device_handle)
-    ret = zcanlib.SetValue(ip, str(chn) + "/clock", "60000000")
-    if ret != ZCAN_STATUS_OK:
-        print("Set CH%d CANFD clock failed!" %(chn))
-    ret = zcanlib.SetValue(ip, str(chn) + "/canfd_standard", "0")
-    if ret != ZCAN_STATUS_OK:
-        print("Set CH%d CANFD standard failed!" %(chn))
-    ret = zcanlib.SetValue(ip, str(chn) + "/initenal_resistance", "1")
-    if ret != ZCAN_STATUS_OK:
-        print("Open CH%d resistance failed!" %(chn))
-    zcanlib.ReleaseIProperty(ip) 
 
-    chn_init_cfg = ZCAN_CHANNEL_INIT_CONFIG()
-    chn_init_cfg.can_type = ZCAN_TYPE_CANFD
-    chn_init_cfg.config.canfd.abit_timing = 101166 #1Mbps
-    chn_init_cfg.config.canfd.dbit_timing = 101166 #1Mbps
-    chn_init_cfg.config.canfd.mode        = 0
-    chn_handle = zcanlib.InitCAN(device_handle, chn, chn_init_cfg)
-    if chn_handle is None:
-        return None
-    zcanlib.StartCAN(chn_handle)
-    return chn_handle
 
 if __name__ == "__main__":
     zcanlib = ZCAN() 
