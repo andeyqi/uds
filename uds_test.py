@@ -17,8 +17,7 @@ class KEY(Structure):
 
 
 class GINFO(Structure):
-    _fields_ = [("is_session_pass", c_ubyte),
-                ("is_get_seed",     c_ubyte),
+    _fields_ = [("is_resp_ok", c_ubyte),
                 ("seed",            SEED),
                 ("key",            KEY)]
 
@@ -27,10 +26,6 @@ ginfo = GINFO()
 ginfo.is_session_pass = 0
 
 secureAccess = windll.LoadLibrary("secureAccess.dll")
-
-def data_deinit():
-    ginfo.is_session_pass = 0
-    ginfo.is_get_seed = 0
 
 #import numpy as np
 
@@ -61,14 +56,18 @@ def can_start(zcanlib, device_handle, chn):
 def deal_service_resp(rcv_canfd_msgs):
     print("recv resp")
     if rcv_canfd_msgs.frame.data[1] == 0x50:
-        ginfo.is_session_pass = 1
+        ginfo.is_resp_ok = 1
+        event.set()
     if rcv_canfd_msgs.frame.data[1] == 0x67:
         ginfo.seed.seed1 = rcv_canfd_msgs.frame.data[3]
         ginfo.seed.seed2 = rcv_canfd_msgs.frame.data[4]
         ginfo.seed.seed3 = rcv_canfd_msgs.frame.data[5]
         ginfo.seed.seed4 = rcv_canfd_msgs.frame.data[6]
-        ginfo.is_get_seed = 1
-    event.set()
+        ginfo.is_resp_ok = 1
+        event.set()
+    if rcv_canfd_msgs.frame.data[1] == 0x7f:
+        ginfo.is_resp_ok = 0
+        event.set()
 
 def recive_thread_func():
     #Receive Messages
@@ -84,10 +83,9 @@ def recive_thread_func():
         mutex.release()
         #else:
         #    break
-
-def service_0x27():
-    print("uds 0x27 service")
-    #step 1 set 诊断会话控制 01 默认 02 编程 03 扩展
+def service_0x10():
+    #设置诊断会话模式
+    print("uds 0x10 service")
     canfd_msgs = ZCAN_TransmitFD_Data()
     canfd_msgs.transmit_type = 1 #Send Self
     canfd_msgs.frame.eff     = 0 #extern frame
@@ -104,10 +102,15 @@ def service_0x27():
     mutex.release()
     event.wait()
     event.clear()
-    if ginfo.is_session_pass == 0:
-        return 
-    print("Set session OK ,%d" % ginfo.is_session_pass)   
-    #step 2 get seed data
+    if ginfo.is_resp_ok == 0:
+        print("0x10 service NG")
+        return
+    print("0x10 service ok")
+
+def service_0x27():
+    print("uds 0x27 service")
+    #step 1 get seed data
+    canfd_msgs = ZCAN_TransmitFD_Data()
     canfd_msgs.transmit_type = 1 #Send Self
     canfd_msgs.frame.eff     = 0 #extern frame
     canfd_msgs.frame.rtr     = 0 #remote frame
@@ -123,12 +126,12 @@ def service_0x27():
     mutex.release()
     event.wait()
     event.clear()
-    if ginfo.is_get_seed == 0:
+    if ginfo.is_resp_ok == 0:
         print("get seed NG")
         return
     print("get seed ok")
     secureAccess.security_key(byref(ginfo.seed),byref(ginfo.key))
-    #step 3 send key value
+    #step 2 send key value
     canfd_msgs.transmit_type = 1 #Send Self
     canfd_msgs.frame.eff     = 0 #extern frame
     canfd_msgs.frame.rtr     = 0 #remote frame
@@ -147,14 +150,19 @@ def service_0x27():
     print("Tranmit CANFD Num: %d. %x" %(ret,canfd_msgs.frame.can_id))
     mutex.release()
     event.wait()
-    data_deinit()
-    #step 4 wait compare key value
-    
+    event.clear()
+    if ginfo.is_resp_ok == 0:
+        print("ompare key NG")
+        return
+    print("compare key ok")
+
 def shell_command():
     while True:
         s = input("C71KB#")
         if s == "0x27":
             service_0x27()
+        if s == "0x10":
+            service_0x10()
         print("%s" %(s))
         #secureAccess.security_key(byref(seed),byref(key))
         #print("%x %x %x %x %x %x %x %x %x %x %x %x %x %x %x %x " %(key.key1, key.key2, key.key3, key.key4, key.key5, key.key6, key.key7, key.key8,
