@@ -4,6 +4,7 @@ import ctypes
 import os
 from multiprocessing import Process, Lock
 import time
+import tkinter as tk
 
 
 class SEED(Structure):
@@ -168,6 +169,12 @@ def shell_command():
         #print("%x %x %x %x %x %x %x %x %x %x %x %x %x %x %x %x " %(key.key1, key.key2, key.key3, key.key4, key.key5, key.key6, key.key7, key.key8,
         #key.key9, key.key10, key.key11, key.key12, key.key13, key.key14, key.key15, key.key16))
 
+def sessionModeFunc():
+    print("set session ")
+    service_0x10()
+
+def SecurityAccessFunc():
+    service_0x27()
 
 if __name__ == "__main__":
     zcanlib = ZCAN() 
@@ -188,6 +195,14 @@ if __name__ == "__main__":
     event = threading.Event()
     shell_thread = threading.Thread(group=None, target=shell_command, name="shell_thread")
     shell_thread.start()
+    
+    window = tk.Tk()
+    window.title('My Window')
+    window.geometry('800x600')
+    
+    SessionModeButton = tk.Button(window, text='扩展会话模式', font=('Arial', 12), width=10, height=1, command=sessionModeFunc).place(x=50,y=550)
+    SecurityAccessButton = tk.Button(window, text='安全访问', font=('Arial', 12), width=10, height=1, command=SecurityAccessFunc).place(x=200,y=550)
+    window.mainloop()
     
     recv_thread.join()
     shell_thread.join()
