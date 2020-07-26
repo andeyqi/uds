@@ -104,6 +104,10 @@ def service_0x10():
     canfd_msgs.frame.data[2] = 0x03
     mutex.acquire()
     ret = zcanlib.TransmitFD(chn_handle, canfd_msgs, 1)
+    if ret == 0:
+        print("send CANFD NG")
+        mutex.release()
+        return
     print("Tranmit CANFD Num: %d. %x" %(ret,canfd_msgs.frame.can_id))
     mutex.release()
     event.wait()
@@ -127,6 +131,10 @@ def service_0x11():
     canfd_msgs.frame.data[2] = 0x03
     mutex.acquire()
     ret = zcanlib.TransmitFD(chn_handle, canfd_msgs, 1)
+    if ret == 0:
+        print("send CANFD NG")
+        mutex.release()
+        return
     print("Tranmit CANFD Num: %d. %x" %(ret,canfd_msgs.frame.can_id))
     mutex.release()
     event.wait()
@@ -151,6 +159,10 @@ def service_0x27():
     canfd_msgs.frame.data[2] = 0x01
     mutex.acquire()
     ret = zcanlib.TransmitFD(chn_handle, canfd_msgs, 1)
+    if ret == 0:
+        print("send CANFD NG")
+        mutex.release()
+        return
     print("Tranmit CANFD Num: %d. %x" %(ret,canfd_msgs.frame.can_id))
     mutex.release()
     event.wait()
@@ -176,6 +188,10 @@ def service_0x27():
         canfd_msgs.frame.data[4+i] = ginfo.key.key[i]
     mutex.acquire()
     ret = zcanlib.TransmitFD(chn_handle, canfd_msgs, 1)
+    if ret == 0:
+        print("send CANFD NG")
+        mutex.release()
+        return
     print("Tranmit CANFD Num: %d. %x" %(ret,canfd_msgs.frame.can_id))
     mutex.release()
     event.wait()
