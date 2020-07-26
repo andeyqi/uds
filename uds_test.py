@@ -59,6 +59,9 @@ def deal_service_resp(rcv_canfd_msgs):
     if rcv_canfd_msgs.frame.data[1] == 0x50:
         ginfo.is_resp_ok = 1
         event.set()
+    if rcv_canfd_msgs.frame.data[1] == 0x51:
+        ginfo.is_resp_ok = 1
+        event.set()
     if rcv_canfd_msgs.frame.data[1] == 0x67:
         ginfo.seed.seed1 = rcv_canfd_msgs.frame.data[3]
         ginfo.seed.seed2 = rcv_canfd_msgs.frame.data[4]
@@ -79,7 +82,9 @@ def recive_thread_func():
             rcv_canfd_msgs, rcv_canfd_num = zcanlib.ReceiveFD(chn_handle, rcv_canfd_num, 1000)
             for i in range(rcv_canfd_num):
                 if rcv_canfd_msgs[i].frame.can_id == 0x79a:
-                    print("recv 0x79a msg [%x] [%x] [%x] [%x] [%x] [%x]" %(rcv_canfd_msgs[i].frame.data[0],rcv_canfd_msgs[i].frame.data[1],rcv_canfd_msgs[i].frame.data[2],rcv_canfd_msgs[i].frame.data[3],rcv_canfd_msgs[i].frame.data[4],rcv_canfd_msgs[i].frame.data[5]))
+                    print("recv 0x79a msg [%x] [%x] [%x] [%x] [%x] [%x] [%x] [%x]" 
+                    %(rcv_canfd_msgs[i].frame.data[0],rcv_canfd_msgs[i].frame.data[1],rcv_canfd_msgs[i].frame.data[2],rcv_canfd_msgs[i].frame.data[3],
+                     rcv_canfd_msgs[i].frame.data[4],rcv_canfd_msgs[i].frame.data[5],rcv_canfd_msgs[i].frame.data[6],rcv_canfd_msgs[i].frame.data[7]))
                     deal_service_resp(rcv_canfd_msgs[i])
         mutex.release()
         #else:
@@ -107,6 +112,29 @@ def service_0x10():
         print("0x10 service NG")
         return
     print("0x10 service ok")
+    
+def service_0x11():
+    print("uds 0x10 service")
+    canfd_msgs = ZCAN_TransmitFD_Data()
+    canfd_msgs.transmit_type = 1 #Send Self
+    canfd_msgs.frame.eff     = 0 #extern frame
+    canfd_msgs.frame.rtr     = 0 #remote frame
+    canfd_msgs.frame.brs     = 1 #BRS 
+    canfd_msgs.frame.can_id  = 0x792
+    canfd_msgs.frame.len     = 8
+    canfd_msgs.frame.data[0] = 0x02
+    canfd_msgs.frame.data[1] = 0x11
+    canfd_msgs.frame.data[2] = 0x03
+    mutex.acquire()
+    ret = zcanlib.TransmitFD(chn_handle, canfd_msgs, 1)
+    print("Tranmit CANFD Num: %d. %x" %(ret,canfd_msgs.frame.can_id))
+    mutex.release()
+    event.wait()
+    event.clear()
+    if ginfo.is_resp_ok == 0:
+        print("0x11 service NG")
+        return
+    print("0x11 service ok")
 
 def service_0x27():
     print("uds 0x27 service")
@@ -170,12 +198,14 @@ def shell_command():
         #key.key9, key.key10, key.key11, key.key12, key.key13, key.key14, key.key15, key.key16))
 
 def sessionModeFunc():
-    print("set session ")
     service_0x10()
 
 def SecurityAccessFunc():
     service_0x27()
 
+def EcuReset():
+    service_0x11()
+    
 if __name__ == "__main__":
     zcanlib = ZCAN() 
     handle = zcanlib.OpenDevice(ZCAN_USBCANFD_MINI, 0,0)
@@ -200,8 +230,10 @@ if __name__ == "__main__":
     window.title('My Window')
     window.geometry('800x600')
     
-    SessionModeButton = tk.Button(window, text='扩展会话模式', font=('Arial', 12), width=10, height=1, command=sessionModeFunc).place(x=50,y=550)
-    SecurityAccessButton = tk.Button(window, text='安全访问', font=('Arial', 12), width=10, height=1, command=SecurityAccessFunc).place(x=200,y=550)
+    SessionModeButton = tk.Button(window, text='SessionControl', font=('Arial', 12), width=15, height=1, command=sessionModeFunc).place(x=50,y=550)
+    SecurityAccessButton = tk.Button(window, text='SecurityAccess', font=('Arial', 12), width=15, height=1, command=SecurityAccessFunc).place(x=200,y=550)
+    EcuResetButton = tk.Button(window, text='EcuReset', font=('Arial', 12), width=15, height=1, command=EcuReset).place(x=350,y=550)
+    
     window.mainloop()
     
     recv_thread.join()
