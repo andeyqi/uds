@@ -19,10 +19,10 @@ class KEY(Structure):
 
 class GINFO(Structure):
     _fields_ = [("is_resp_ok", c_ubyte),
-                ("seed",            SEED),
-                ("key",            KEY)]
+                ("seed",       SEED),
+                ("key",        KEY)]
 
-
+ECUVin = ['a','a','N','N','N','N','N','N','N','N','N','N','N','N','N','N','N']
 ginfo = GINFO()
 ginfo.is_session_pass = 0
 
@@ -55,21 +55,32 @@ def can_start(zcanlib, device_handle, chn):
     return chn_handle
 
 def deal_service_resp(rcv_canfd_msgs):
-    print("recv resp")
-    if rcv_canfd_msgs.frame.data[1] == 0x50:
+    i = 1
+    if rcv_canfd_msgs.frame.len > 8:
+        i = 2
+        
+    if rcv_canfd_msgs.frame.data[i] == 0x50:
         ginfo.is_resp_ok = 1
         event.set()
-    if rcv_canfd_msgs.frame.data[1] == 0x51:
+    if rcv_canfd_msgs.frame.data[i] == 0x51:
         ginfo.is_resp_ok = 1
         event.set()
-    if rcv_canfd_msgs.frame.data[1] == 0x67:
-        ginfo.seed.seed1 = rcv_canfd_msgs.frame.data[3]
-        ginfo.seed.seed2 = rcv_canfd_msgs.frame.data[4]
-        ginfo.seed.seed3 = rcv_canfd_msgs.frame.data[5]
-        ginfo.seed.seed4 = rcv_canfd_msgs.frame.data[6]
+    if rcv_canfd_msgs.frame.data[i] == 0x62:
+        if rcv_canfd_msgs.frame.data[++i] == 0xf1 and rcv_canfd_msgs.frame.data[++i] == 0x90:
+            for j in range(0,17):
+                ECUVin[j] = rcv_canfd_msgs.frame.data[i]
+                ++i
         ginfo.is_resp_ok = 1
         event.set()
-    if rcv_canfd_msgs.frame.data[1] == 0x7f:
+    if rcv_canfd_msgs.frame.data[i] == 0x67:
+        if rcv_canfd_msgs.frame.data[i+1] == 0x01:
+            ginfo.seed.seed1 = rcv_canfd_msgs.frame.data[i+2]
+            ginfo.seed.seed2 = rcv_canfd_msgs.frame.data[i+3]
+            ginfo.seed.seed3 = rcv_canfd_msgs.frame.data[i+4]
+            ginfo.seed.seed4 = rcv_canfd_msgs.frame.data[i+5]
+        ginfo.is_resp_ok = 1
+        event.set()
+    if rcv_canfd_msgs.frame.data[i] == 0x7f:
         ginfo.is_resp_ok = 0
         event.set()
 
@@ -82,9 +93,10 @@ def recive_thread_func():
             rcv_canfd_msgs, rcv_canfd_num = zcanlib.ReceiveFD(chn_handle, rcv_canfd_num, 1000)
             for i in range(rcv_canfd_num):
                 if rcv_canfd_msgs[i].frame.can_id == 0x79a:
-                    print("recv 0x79a msg [%x] [%x] [%x] [%x] [%x] [%x] [%x] [%x]" 
-                    %(rcv_canfd_msgs[i].frame.data[0],rcv_canfd_msgs[i].frame.data[1],rcv_canfd_msgs[i].frame.data[2],rcv_canfd_msgs[i].frame.data[3],
-                     rcv_canfd_msgs[i].frame.data[4],rcv_canfd_msgs[i].frame.data[5],rcv_canfd_msgs[i].frame.data[6],rcv_canfd_msgs[i].frame.data[7]))
+                    print("<%d> " %(rcv_canfd_msgs[i].frame.len),end='')
+                    for j in  range(rcv_canfd_msgs[i].frame.len):
+                        print("[%02x]" %(rcv_canfd_msgs[i].frame.data[j]),end='')
+                    print("")
                     deal_service_resp(rcv_canfd_msgs[i])
         mutex.release()
         #else:
@@ -108,7 +120,7 @@ def service_0x10():
         print("send CANFD NG")
         mutex.release()
         return
-    print("Tranmit CANFD Num: %d. %x" %(ret,canfd_msgs.frame.can_id))
+    #print("Tranmit CANFD Num: %d. %x" %(ret,canfd_msgs.frame.can_id))
     mutex.release()
     event.wait()
     event.clear()
@@ -135,7 +147,7 @@ def service_0x11():
         print("send CANFD NG")
         mutex.release()
         return
-    print("Tranmit CANFD Num: %d. %x" %(ret,canfd_msgs.frame.can_id))
+    #print("Tranmit CANFD Num: %d. %x" %(ret,canfd_msgs.frame.can_id))
     mutex.release()
     event.wait()
     event.clear()
@@ -143,6 +155,36 @@ def service_0x11():
         print("0x11 service NG")
         return
     print("0x11 service ok")
+
+def service_0x22(byte0,byte1):
+    print("0x22 %x %x" %(byte0,byte1))
+    #VinValue.set("xxxxxxxxxxxxxxxxxxxxxxxx")
+    canfd_msgs = ZCAN_TransmitFD_Data()
+    canfd_msgs.transmit_type = 1 #Send Self
+    canfd_msgs.frame.eff     = 0 #extern frame
+    canfd_msgs.frame.rtr     = 0 #remote frame
+    canfd_msgs.frame.brs     = 1 #BRS 
+    canfd_msgs.frame.can_id  = 0x792
+    canfd_msgs.frame.len     = 8
+    canfd_msgs.frame.data[0] = 0x03
+    canfd_msgs.frame.data[1] = 0x22
+    canfd_msgs.frame.data[2] = 0xF1
+    canfd_msgs.frame.data[3] = 0x90
+    
+    mutex.acquire()
+    ret = zcanlib.TransmitFD(chn_handle, canfd_msgs, 1)
+    if ret == 0:
+        print("send CANFD NG")
+        mutex.release()
+        return
+    #print("Tranmit CANFD Num: %d. %x" %(ret,canfd_msgs.frame.can_id))
+    mutex.release()
+    event.wait()
+    event.clear()
+    if ginfo.is_resp_ok == 0:
+        print("read vin NG")
+        return
+    print("read vin ok")
 
 def service_0x27():
     print("uds 0x27 service")
@@ -163,7 +205,7 @@ def service_0x27():
         print("send CANFD NG")
         mutex.release()
         return
-    print("Tranmit CANFD Num: %d. %x" %(ret,canfd_msgs.frame.can_id))
+    #print("Tranmit CANFD Num: %d. %x" %(ret,canfd_msgs.frame.can_id))
     mutex.release()
     event.wait()
     event.clear()
@@ -184,15 +226,16 @@ def service_0x27():
     canfd_msgs.frame.data[2] = 0x27
     canfd_msgs.frame.data[3] = 0x02
     for i in range (0,16):
-        print("% d %d " % ( i , ginfo.key.key[i]))
+        print("[%02x]" % ( ginfo.key.key[i]),end='')
         canfd_msgs.frame.data[4+i] = ginfo.key.key[i]
+    print("")
     mutex.acquire()
     ret = zcanlib.TransmitFD(chn_handle, canfd_msgs, 1)
     if ret == 0:
         print("send CANFD NG")
         mutex.release()
         return
-    print("Tranmit CANFD Num: %d. %x" %(ret,canfd_msgs.frame.can_id))
+    #print("Tranmit CANFD Num: %d. %x" %(ret,canfd_msgs.frame.can_id))
     mutex.release()
     event.wait()
     event.clear()
@@ -222,6 +265,10 @@ def SecurityAccessFunc():
 def EcuReset():
     service_0x11()
     
+def Vin_Read():
+    service_0x22(0xf1,0x90)
+    #vinText(ECUVin)
+    
 if __name__ == "__main__":
     zcanlib = ZCAN() 
     handle = zcanlib.OpenDevice(ZCAN_USBCANFD_MINI, 0,0)
@@ -249,6 +296,13 @@ if __name__ == "__main__":
     SessionModeButton = tk.Button(window, text='SessionControl', font=('Arial', 12), width=15, height=1, command=sessionModeFunc).place(x=50,y=550)
     SecurityAccessButton = tk.Button(window, text='SecurityAccess', font=('Arial', 12), width=15, height=1, command=SecurityAccessFunc).place(x=200,y=550)
     EcuResetButton = tk.Button(window, text='EcuReset', font=('Arial', 12), width=15, height=1, command=EcuReset).place(x=350,y=550)
+    
+    VinLabel = tk.Label(text="VIN/F190:", fg="black", bg="white",width=10, height=1).place(x=20,y=20)
+    #VinValue = tk.StringVar()
+    #VinLabelData = tk.Label(window,textvariable=VinValue, fg="black", bg="white",width=60, height=1).place(x=120,y=20)
+    vinText = tk.Text(window, height=1,width=60,).place(x=120,y=20)
+    VinDataButtonRead = tk.Button(window, text='read', font=('Arial', 10), width=5, height=1, command=Vin_Read).place(x=550,y=20)
+    VinDataButtonWrite = tk.Button(window, text='write', font=('Arial', 10), width=5, height=1, command=EcuReset).place(x=620,y=20)
     
     window.mainloop()
     
